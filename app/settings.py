@@ -144,7 +144,7 @@ AUTHENTICATION_BACKENDS = [
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     { 'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator', },
-    { 'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', },
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', 'OPTIONS': {'min_length': 8}},
     { 'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator', },
     { 'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator', },
 ]
@@ -156,6 +156,12 @@ AUTH_PASSWORD_VALIDATORS = [
 ACCESS_TOKEN_LIFETIME = timedelta(minutes=15)  # Ajusta según necesidad
 REFRESH_TOKEN_LIFETIME = timedelta(days=7)
 
+# Configuración de sesión segura
+SESSION_COOKIE_SECURE = not DEBUG  # Solo HTTPS en producción
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_HTTPONLY = True
 # =========================================================
 # 📧 EMAIL SETTINGS
 # =========================================================

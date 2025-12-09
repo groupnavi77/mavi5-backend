@@ -6,6 +6,7 @@ from core.product_ins.api.endpoints import router as product_ins_router
 from core.tag.api.endpoints import router as tag_router
 from core.user.api.endpoints import router as user_router
 from core.campaing.api.endpoints import router as campaing_router
+from core.user.api.endpoints_advanced import advanced_router
 
 api = NinjaExtraAPI(
    
@@ -20,3 +21,4 @@ api.add_router("/products_ins/", product_ins_router, tags=["Productos inspirados
 api.add_router("/products_base/", product_base_router, tags=["Productos Base"])
 api.add_router("/tags/", tag_router, tags=["Etiquetas"])
 api.add_router("/auth/", user_router, tags=["Autenticación"])
+api.add_router("/auth/advanced/", advanced_router, tags=["Auth Avanzado"])
