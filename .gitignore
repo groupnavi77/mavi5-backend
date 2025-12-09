@@ -1,0 +1,45 @@
+# Entornos virtuales
+env/
+venv/
+.Python
+
+# Archivos de configuración local
+.env
+.env.local
+local_settings.py
+
+# Compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos de instalación y distribución
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+*.egg
+*.egg-info/
+.installed.cfg
+
+# Archivos temporales
+*.log
+*.pot
+*.mo
+*.swp
+*.tmp
+
+# Archivos de base de datos (opcional si no quieres subir el sqlite)
+db.sqlite3
+
+# Archivos generados por Django
+media/
+static/
+
+# Archivos específicos del sistema operativo
+.DS_Store
+Thumbs.db

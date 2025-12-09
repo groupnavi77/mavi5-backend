@@ -1,0 +1,9 @@
+Hola {{ user.first_name }},
+
+Gracias por registrarte en Avisosya.pe. Por favor, verifica tu dirección de correo electrónico haciendo clic en el siguiente enlace:
+
+{{ link }}
+
+Este enlace expirará en 24 horas.
+
+Si no creaste esta cuenta, ignora este mensaje.
