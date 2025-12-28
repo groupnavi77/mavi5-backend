@@ -99,19 +99,5 @@ class ProductAdmin(admin.ModelAdmin):
         
         return super().formfield_for_dbfield(db_field, request, **kwargs)
     
-admin.site.register( 
-    Category,   
-    DraggableMPTTAdmin,
-    
-    list_display=(
-        'tree_actions',
-        'indented_title',
-        # ...more fields if you feel like it...
-    ),
-    prepopulated_fields = {'slug':('title',)},
-    list_display_links=(
-        'indented_title',
-    ),)
-
 admin.site.register(Product, ProductAdmin)
 admin.site.register(ProductBase, ProductBaseAdmin)

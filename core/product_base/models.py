@@ -135,7 +135,23 @@ class Price(models.Model):
     UNIT = (
         ('Unidad', 'Unidad'),
         ('Docena', 'Docena'),
+        ('Caja', 'Caja'),
+        ('Paquete', 'Paquete'),
+        ('Kilogramo', 'Kilogramo'),
+        ('Metro', 'Metro'),
+        ('Litro', 'Litro'),
     )
+    
+    # Mapeo de singular a plural
+    UNIT_PLURAL = {
+        'Unidad': 'Unidades',
+        'Docena': 'Docenas',
+        'Caja': 'Cajas',
+        'Paquete': 'Paquetes',
+        'Kilogramo': 'Kilogramos',
+        'Metro': 'Metros',
+        'Litro': 'Litros',
+    }
     
     product = models.ForeignKey(
         ProductBase,
@@ -185,6 +201,49 @@ class Price(models.Model):
 
     def __str__(self):
         return f"{self.product.title} - {self.quantity} {self.unit}: ${self.price}"
+    
+    def get_unit_display_smart(self):
+        """
+        Retorna la unidad en singular o plural según la cantidad.
+        
+        Ejemplos:
+        - quantity=1, unit='Unidad' → 'Unidad'
+        - quantity=2, unit='Unidad' → 'Unidades'
+        - quantity=1, unit='Docena' → 'Docena'
+        - quantity=5, unit='Docena' → 'Docenas'
+        """
+        if self.quantity == 1:
+            return self.unit  # Singular
+        else:
+            return self.UNIT_PLURAL.get(self.unit, self.unit + 's')  # Plural
+    
+    def get_unit_label(self):
+        """
+        Alias de get_unit_display_smart() para usar en templates.
+        """
+        return self.get_unit_display_smart()
+    
+    def get_formatted_quantity(self):
+        """
+        Retorna la cantidad con su unidad en formato legible.
+        
+        Ejemplos:
+        - "1 Unidad"
+        - "100 Unidades"
+        - "1 Docena"
+        - "5 Docenas"
+        """
+        return f"{self.quantity} {self.get_unit_display_smart()}"
+    
+    def get_price_description(self):
+        """
+        Retorna descripción completa del precio.
+        
+        Ejemplos:
+        - "100 Unidades por $10.00"
+        - "1 Docena por $25.50"
+        """
+        return f"{self.get_formatted_quantity()} por ${self.price}"
     
     def get_discount_info(self):
         """

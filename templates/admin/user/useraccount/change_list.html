@@ -1,0 +1,12 @@
+{% extends "admin/change_list.html" %}
+
+{% block content_title %}
+    {{ block.super }}
+    {% if show_analytics_button %}
+    <div style="float: right; margin-top: -40px;">
+        <a href="{% url 'admin:user_analytics' %}" class="button" style="background: #007bff; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none;">
+            📊 Ver Analíticas
+        </a>
+    </div>
+    {% endif %}
+{% endblock %}

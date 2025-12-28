@@ -7,19 +7,6 @@ from decimal import Decimal
 # 1. ESQUEMAS ANIDADOS
 # ==============================================================================
 
-class DiscountCampaignSchema(Schema):
-    """Schema para campañas de descuento"""
-    id: int
-    name: str
-    code: str
-    description: Optional[str] = None
-    campaign_type: str
-    discount: Decimal
-    discount_type: str
-    start_date: datetime
-    expiration_date: datetime
-    is_active: bool
-    priority: int
 
 class CategorySchema(Schema):
     """Schema para categoría (asume que ya existe en tu código)"""
@@ -213,6 +200,24 @@ class ProductBaseOut(Schema):
         price_values = [p.price for p in prices]
         min_price = min(price_values)
         max_price = max(price_values)
+
+        # Encontrar cantidad y unidad del precio mínimo
+        min_cantity = 0
+        min_unit = None
+        max_cantity = 0
+        max_unit = None
+        
+
+        for p in prices:
+            if p.price == min_price:
+                min_cantity = p.quantity
+                min_unit = p.unit
+                min_unit_smart = p.get_unit_display_smart()
+            if p.price == max_price:
+                max_cantity = p.quantity
+                max_unit = p.unit
+                max_unit_smart = p.get_unit_display_smart()
+
         
         # Precios con descuento
         price_new_values = [p.price_new() for p in prices]
@@ -273,6 +278,12 @@ class ProductBaseOut(Schema):
         result = {
             'min': str(min_price),
             'max': str(max_price),
+            'min_cantity': min_cantity,
+            'min_unit': min_unit,
+            'min_unit_smart': min_unit_smart,
+            'max_cantity': max_cantity,
+            'max_unit': max_unit,
+            'max_unit_smart': max_unit_smart,
             'min_discounted': str(min_discounted),
             'max_discounted': str(max_discounted),
             'has_discount': has_discount,
@@ -399,9 +410,11 @@ class ProductBaseListOut(Schema):
             if p.price == min_price:
                 min_cantity = p.quantity
                 min_unit = p.unit
+                min_unit_smart = p.get_unit_display_smart()
             if p.price == max_price:
                 max_cantity = p.quantity
                 max_unit = p.unit
+                max_unit_smart = p.get_unit_display_smart()
 
 
 
@@ -466,8 +479,10 @@ class ProductBaseListOut(Schema):
             'max': str(max_price),
             'min_cantity': min_cantity,
             'min_unit': min_unit,
+            'min_unit_smart': min_unit_smart,
             'max_cantity': max_cantity,
             'max_unit': max_unit,
+            'max_unit_smart': max_unit_smart,
             'min_discounted': str(min_discounted),
             'max_discounted': str(max_discounted),
             'has_discount': has_discount,

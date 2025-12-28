@@ -38,19 +38,7 @@ class ProductBaseService:
         """
         QuerySet base con todas las optimizaciones.
         """
-        queryset = ProductBase.objects.select_related(
-            'category'
-        ).prefetch_related(
-            'product_base_images',
-            'product_base_prices',
-            'product_base_discounts',
-            'tag'
-        ).annotate(
-            prices_count=Count('product_base_prices', distinct=True),
-            images_count=Count('product_base_images', distinct=True),
-            min_price=Min('product_base_prices__price'),
-            max_price=Max('product_base_prices__price')
-        )
+        queryset = ProductBase.objects.all()
         
         return queryset
     

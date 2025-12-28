@@ -9,7 +9,7 @@ from ninja_extra.pagination import (
 from enum import Enum
 
 from core.product_base.api.services import ProductBaseService
-from core.product_base.api.filters import ProductBaseFilter
+from core.product_base.api.filters import ProductBaseFilter, ProductBaseFilterSecondary
 from core.product_base.api.schemas import ProductBaseOut, ProductBaseListOut
 from core.product_base.models import ProductBase
 
@@ -112,9 +112,8 @@ def get_product_by_slug(request, slug: str):
     Obtiene un producto base por su slug.
     Ideal para URLs amigables tipo: /productos/tarjetas-de-presentacion
     """
-    product = get_object_or_404(
-        ProductBaseService.get_product_by_slug(slug, use_cache=True)
-    )
+    product =  ProductBaseService.get_product_by_slug(slug, use_cache=True)
+
     return product
 
 
@@ -134,24 +133,23 @@ def get_product_by_key(request, key: str):
     )
     return product
 
-
-# 📁 ENDPOINT: Productos de una categoría
+# 📁 ENDPOINT: Productos de una categoría por slug
 @router.get(
-    "/category/{category_id}",
+    "/category/{category_slug}",
     response=PaginatedResponseSchema[ProductBaseListOut],
-    summary="Productos por categoría",
+    summary="Productos por slug",
     description="Lista productos de una categoría específica"
 )
-@paginate(ProductBasePagination)
-def list_products_by_category(
+@paginate(ProductBasePagination, filter_schema=ProductBaseFilterSecondary)
+def list_products_by_category_slug(
     request,
-    category_id: int,
+    category_slug: str,
     order_by: ProductBaseOrderBy = ProductBaseOrderBy.NEWEST
 ):
     """Lista productos de una categoría específica."""
     return (
         ProductBaseService.list_products()
-        .filter(category_id=category_id)
+        .filter(category__slug=category_slug)
         .order_by(order_by.value)
     )
 

@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     'core.tag',
     'core.review',
     'core.campaing',
+    'core.configuration',
 ]
 
 # =========================================================
