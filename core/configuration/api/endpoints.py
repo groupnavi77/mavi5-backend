@@ -1,22 +1,26 @@
-# ============================================
-# api.py - API con búsqueda por SLUG agregada
-# ============================================
+# core/configuration/api/endpoints.py - COMPLETO CON MENU Y PAGE
 
-from ninja import Router, Query
+from ninja import Router
 from django.db.models import Q
 from django.utils import timezone
-from datetime import datetime
-from ..models import Slider
-from ..api.schemas import SliderSchema, SliderListSchema, SliderStatsSchema
+from django.shortcuts import get_object_or_404
 from typing import List, Optional, Dict
+from datetime import datetime
+
+from ..models import Slider, Menu, Page
+from .schemas import (
+    SliderSchema, SliderListSchema, SliderStatsSchema,
+    MenuSchema, MenuListSchema, MenuTreeSchema,
+    PageListSchema, PageDetailSchema, PageSEOSchema
+)
 
 router = Router()
 
-# ============================================
-# ENDPOINTS
-# ============================================
 
-# 1. LISTAR TODOS CON FILTROS Y PAGINACIÓN
+# ============================================================================
+# ENDPOINTS DE SLIDER (YA EXISTENTES)
+# ============================================================================
+
 @router.get("/sliders/list", response=List[SliderListSchema])
 def list_sliders(
     request,
@@ -26,44 +30,22 @@ def list_sliders(
     order_by: Optional[str] = 'order',
     currently_active_only: Optional[bool] = False
 ):
-    """
-    Lista todos los sliders con filtros
-    
-    Parámetros:
-    - section: Filtrar por sección (ej: home_hero, home_deals)
-    - is_active: true/false para filtrar por estado
-    - search: Buscar en título, slug o contenido
-    - order_by: Campo para ordenar (order, -order, created_at, -created_at, title)
-    - currently_active_only: Solo sliders activos actualmente (considera fechas)
-    
-    Ejemplos:
-    GET /api/sliders/list
-    GET /api/sliders/list?section=home_hero
-    GET /api/sliders/list?is_active=true
-    GET /api/sliders/list?search=ofertas
-    GET /api/sliders/list?order_by=-created_at
-    GET /api/sliders/list?currently_active_only=true
-    """
-    
+    """Lista todos los sliders con filtros"""
     queryset = Slider.objects.all()
     
-    # Filtrar por sección
     if section:
         queryset = queryset.filter(section=section)
     
-    # Filtrar por estado activo
     if is_active is not None:
         queryset = queryset.filter(is_active=is_active)
     
-    # Filtrar por búsqueda en título, slug o contenido
     if search:
         queryset = queryset.filter(
             Q(title__icontains=search) |
-            Q(slug__icontains=search) |  # ✨ Búsqueda por slug
+            Q(slug__icontains=search) |
             Q(content__icontains=search)
         )
     
-    # Filtrar solo los actualmente activos (con fechas)
     if currently_active_only:
         now = timezone.now()
         queryset = queryset.filter(
@@ -74,24 +56,23 @@ def list_sliders(
             Q(end_date__isnull=True) | Q(end_date__gte=now)
         )
     
-    # Ordenar
-    valid_order_fields = ['order', '-order', 'created_at', '-created_at', 'title', '-title', 'section', 'slug', '-slug']
+    valid_order_fields = ['order', '-order', 'created_at', '-created_at', 'title', 'slug']
     if order_by in valid_order_fields:
         queryset = queryset.order_by(order_by)
     else:
         queryset = queryset.order_by('section', 'order')
     
-    # Construir response
+    # Construir respuesta manualmente
     result = []
     for slider in queryset:
         result.append({
             'id': slider.id,
             'title': slider.title,
-            'slug': slider.slug,  # ✨ Incluir slug
+            'slug': slider.slug,
             'section': slider.section,
             'section_display': slider.get_section_display(),
             'image_url': request.build_absolute_uri(slider.image.url) if slider.image else None,
-            'heading': slider.get_content_field('heading'),
+            'heading': slider.content.get('heading') if slider.content else None,
             'order': slider.order,
             'is_active': slider.is_active,
             'is_currently_active': slider.is_currently_active(),
@@ -100,22 +81,10 @@ def list_sliders(
     return result
 
 
-# 2. LISTAR POR SECCIÓN (SIN PAGINACIÓN)
 @router.get("/sliders/section/{section_name}", response=List[SliderSchema])
 def get_sliders_by_section(request, section_name: str, include_inactive: bool = False):
-    """
-    Obtiene sliders de una sección específica (solo activos por defecto)
-    
-    Parámetros:
-    - section_name: Nombre de la sección
-    - include_inactive: true para incluir inactivos
-    
-    Ejemplos:
-    GET /api/sliders/section/home_hero
-    GET /api/sliders/section/home_deals?include_inactive=true
-    """
+    """Obtiene sliders de una sección específica"""
     now = timezone.now()
-    
     queryset = Slider.objects.filter(section=section_name)
     
     if not include_inactive:
@@ -129,87 +98,10 @@ def get_sliders_by_section(request, section_name: str, include_inactive: bool = 
     
     queryset = queryset.order_by('order')
     
+    # Construir respuesta manualmente
     result = []
     for slider in queryset:
         result.append({
-            'id': slider.id,
-            'title': slider.title,
-            'slug': slider.slug,  # ✨ Incluir slug
-            'section': slider.section,
-            'section_display': slider.get_section_display(),
-            'image_url': request.build_absolute_uri(slider.image.url) if slider.image else None,
-            'content': slider.content,
-            'order': slider.order,
-            'is_active': slider.is_active,
-            'start_date': slider.start_date,
-            'end_date': slider.end_date,
-            'created_at': slider.created_at,
-            'updated_at': slider.updated_at,
-        })
-    
-    return result
-
-
-# 3. OBTENER SLIDER POR ID
-@router.get("/sliders/{slider_id}", response=SliderSchema)
-def get_slider(request, slider_id: int):
-    """
-    Obtiene un slider específico por ID
-    
-    Ejemplo:
-    GET /api/sliders/123
-    """
-    try:
-        slider = Slider.objects.get(id=slider_id)
-        
-        return {
-            'id': slider.id,
-            'title': slider.title,
-            'slug': slider.slug,  # ✨ Incluir slug
-            'section': slider.section,
-            'section_display': slider.get_section_display(),
-            'image_url': request.build_absolute_uri(slider.image.url) if slider.image else None,
-            'content': slider.content,
-            'order': slider.order,
-            'is_active': slider.is_active,
-            'start_date': slider.start_date,
-            'end_date': slider.end_date,
-            'created_at': slider.created_at,
-            'updated_at': slider.updated_at,
-        }
-    except Slider.DoesNotExist:
-        return {"error": "Slider no encontrado"}, 404
-
-
-# 4. ✨ NUEVO: OBTENER SLIDER POR SLUG
-@router.get("/sliders/slug/{slug}", response=SliderSchema)
-def get_slider_by_slug(request, slug: str):
-    """
-    Obtiene un slider específico por SLUG (URL amigable)
-    
-    Parámetros:
-    - slug: Slug único del slider
-    
-    Ejemplos:
-    GET /api/sliders/slug/new-season-womens-style
-    GET /api/sliders/slug/summer-sale-2024
-    GET /api/sliders/slug/ofertas-navidad
-    
-    Response:
-    {
-        "id": 1,
-        "title": "New Season Women's Style",
-        "slug": "new-season-womens-style",
-        "section": "home_hero",
-        "image_url": "http://...",
-        "content": {...},
-        ...
-    }
-    """
-    try:
-        slider = Slider.objects.get(slug=slug)
-        
-        return {
             'id': slider.id,
             'title': slider.title,
             'slug': slider.slug,
@@ -223,185 +115,608 @@ def get_slider_by_slug(request, slug: str):
             'end_date': slider.end_date,
             'created_at': slider.created_at,
             'updated_at': slider.updated_at,
-        }
-    except Slider.DoesNotExist:
-        return {"error": f"Slider con slug '{slug}' no encontrado"}, 404
+        })
+    
+    return result
 
 
-# 5. ESTADÍSTICAS
-@router.get("/sliders/stats/overview", response=SliderStatsSchema)
-def get_slider_stats(request):
-    """
-    Obtiene estadísticas generales de sliders
-    
-    Ejemplo:
-    GET /api/sliders/stats/overview
-    
-    Response:
-    {
-        "total": 15,
-        "active": 10,
-        "inactive": 5,
-        "scheduled": 2,
-        "by_section": {
-            "home_hero": 3,
-            "home_deals": 5
-        }
-    }
-    """
-    now = timezone.now()
-    
-    total = Slider.objects.count()
-    active = Slider.objects.filter(is_active=True).count()
-    inactive = Slider.objects.filter(is_active=False).count()
-    
-    # Contar programados (activos pero fuera de fecha)
-    scheduled = Slider.objects.filter(
-        is_active=True
-    ).filter(
-        Q(start_date__gt=now) | Q(end_date__lt=now)
-    ).count()
-    
-    # Contar por sección
-    by_section = {}
-    sections = Slider.objects.values_list('section', flat=True).distinct()
-    for section in sections:
-        count = Slider.objects.filter(section=section).count()
-        by_section[section] = count
+@router.get("/sliders/{slider_id}", response=SliderSchema)
+def get_slider(request, slider_id: int):
+    """Obtiene un slider por ID"""
+    slider = get_object_or_404(Slider, id=slider_id)
     
     return {
-        'total': total,
-        'active': active,
-        'inactive': inactive,
-        'scheduled': scheduled,
-        'by_section': by_section
+        'id': slider.id,
+        'title': slider.title,
+        'slug': slider.slug,
+        'section': slider.section,
+        'section_display': slider.get_section_display(),
+        'image_url': request.build_absolute_uri(slider.image.url) if slider.image else None,
+        'content': slider.content,
+        'order': slider.order,
+        'is_active': slider.is_active,
+        'start_date': slider.start_date,
+        'end_date': slider.end_date,
+        'created_at': slider.created_at,
+        'updated_at': slider.updated_at,
     }
 
 
-# 6. SECCIONES DISPONIBLES
-@router.get("/sliders/sections/list", response=List[dict])
-def list_sections(request):
+@router.get("/sliders/slug/{slug}", response=SliderSchema)
+def get_slider_by_slug(request, slug: str):
+    """Obtiene un slider por slug"""
+    slider = get_object_or_404(Slider, slug=slug)
+    
+    return {
+        'id': slider.id,
+        'title': slider.title,
+        'slug': slider.slug,
+        'section': slider.section,
+        'section_display': slider.get_section_display(),
+        'image_url': request.build_absolute_uri(slider.image.url) if slider.image else None,
+        'content': slider.content,
+        'order': slider.order,
+        'is_active': slider.is_active,
+        'start_date': slider.start_date,
+        'end_date': slider.end_date,
+        'created_at': slider.created_at,
+        'updated_at': slider.updated_at,
+    }
+
+
+# ============================================================================
+# ENDPOINTS DE MENU (NUEVOS)
+# ============================================================================
+
+@router.get("/menus/list", response=List[MenuListSchema])
+def list_menus(
+    request,
+    menu_type: Optional[str] = None,
+    is_active: Optional[bool] = True,
+    search: Optional[str] = None
+):
     """
-    Lista todas las secciones disponibles con conteo
+    Lista todos los menús con filtros.
+    
+    Parámetros:
+    - menu_type: Filtrar por tipo (header, footer, mobile, sidebar, custom)
+    - is_active: true/false para filtrar activos
+    - search: Buscar en nombre, slug o descripción
+    """
+    queryset = Menu.objects.all()
+    
+    if menu_type:
+        queryset = queryset.filter(menu_type=menu_type)
+    
+    if is_active is not None:
+        queryset = queryset.filter(is_active=is_active)
+    
+    if search:
+        queryset = queryset.filter(
+            Q(name__icontains=search) |
+            Q(slug__icontains=search) |
+            Q(description__icontains=search)
+        )
+    
+    queryset = queryset.order_by('menu_type', 'tree_id', 'lft')
+    
+    # Construir respuesta manualmente
+    result = []
+    for menu in queryset:
+        result.append({
+            'id': menu.id,
+            'name': menu.name,
+            'slug': menu.slug,
+            'menu_type': menu.menu_type,
+            'menu_type_display': menu.get_menu_type_display(),
+            'link_type': menu.link_type,
+            'url': menu.get_url(),
+            'icon': menu.icon,
+            'order': menu.order,
+            'level': menu.level,
+            'is_active': menu.is_active,
+            'parent_id': menu.parent_id,
+        })
+    
+    return result
+
+
+@router.get("/menus/tree/{menu_type}", response=List[MenuTreeSchema])
+def get_menu_tree(request, menu_type: str):
+    """
+    Obtiene el árbol completo de menús para un tipo específico.
+    Solo retorna menús activos organizados jerárquicamente.
+    
+    Parámetros:
+    - menu_type: Tipo de menú (header, footer, mobile, sidebar, custom)
+    
+    Ejemplos:
+    GET /api/menus/tree/header
+    GET /api/menus/tree/footer
+    
+    Response: Árbol jerárquico con children anidados
+    """
+    # Solo raíz activos
+    roots = Menu.objects.filter(
+        menu_type=menu_type,
+        parent__isnull=True,
+        is_active=True
+    ).order_by('order')
+    
+    def build_tree(node):
+        """Construye el árbol recursivamente"""
+        children = node.get_active_children().order_by('order')
+        return {
+            'id': node.id,
+            'name': node.name,
+            'slug': node.slug,
+            'url': node.get_url(),
+            'icon': node.icon,
+            'is_featured': node.is_featured,
+            'level': node.level,
+            'children': [build_tree(child) for child in children]
+        }
+    
+    return [build_tree(root) for root in roots]
+
+@router.get("/menus/{menu_id}", response=MenuSchema)
+def get_menu(request, menu_id: int):
+    """
+    Obtiene detalles completos de un menú específico.
     
     Ejemplo:
-    GET /api/sliders/sections/list
+    GET /api/menus/123
+    """
+    menu = get_object_or_404(Menu, id=menu_id)
+    
+    # ✅ CONSTRUIR CHILDREN CON TODOS LOS CAMPOS REQUERIDOS
+    children = []
+    for child in menu.get_active_children().order_by('order'):
+        children.append({
+            'id': child.id,
+            'name': child.name,
+            'slug': child.slug,
+            'description': child.description or '',
+            'menu_type': child.menu_type,
+            'menu_type_display': child.get_menu_type_display(),
+            'link_type': child.link_type,
+            'link_type_display': child.get_link_type_display(),
+            'url': child.get_url(),
+            'category': child.category_id,
+            'page': child.page_id,
+            'icon': child.icon or '',
+            'image': child.image.url if child.image else None,
+            'image_url': child.image.url if child.image else None,
+            'css_classes': getattr(child, 'css_classes', ''),
+            'attributes': getattr(child, 'attributes', {}),
+            'is_active': child.is_active,
+            'is_featured': child.is_featured,
+            'open_in_new_tab': child.open_in_new_tab,
+            'order': child.order,
+            'parent': child.parent_id,
+            'level': child.level,
+            'mega_menu_columns': getattr(child, 'mega_menu_columns', 1),
+            'has_children': child.has_children(),
+            'children': [],  # Sin recursión profunda
+            'created_at': child.created_at,
+            'updated_at': child.updated_at,
+        })
+    
+    # ✅ CONSTRUIR DICT PRINCIPAL
+    return {
+        'id': menu.id,
+        'name': menu.name,
+        'slug': menu.slug,
+        'description': menu.description or '',
+        'menu_type': menu.menu_type,
+        'menu_type_display': menu.get_menu_type_display(),
+        'link_type': menu.link_type,
+        'link_type_display': menu.get_link_type_display(),
+        'url': menu.get_url(),
+        'category': menu.category_id,
+        'page': menu.page_id,
+        'icon': menu.icon or '',
+        'image': menu.image.url if menu.image else None,
+        'image_url': menu.image.url if menu.image else None,
+        'css_classes': getattr(menu, 'css_classes', ''),
+        'attributes': getattr(menu, 'attributes', {}),
+        'is_active': menu.is_active,
+        'is_featured': menu.is_featured,
+        'open_in_new_tab': menu.open_in_new_tab,
+        'order': menu.order,
+        'parent': menu.parent_id,
+        'level': menu.level,
+        'mega_menu_columns': getattr(menu, 'mega_menu_columns', 1),
+        'has_children': menu.has_children(),
+        'children': children,
+        'created_at': menu.created_at,
+        'updated_at': menu.updated_at,
+    }
+
+
+@router.get("/menus/slug/{slug}", response=MenuSchema)
+def get_menu_by_slug(request, slug: str):
+    """
+    Obtiene un menú por slug.
+    
+    Ejemplo:
+    GET /api/menus/slug/shop-now
+    """
+    menu = get_object_or_404(Menu, slug=slug)
+    
+    # ✅ CONSTRUIR CHILDREN CON TODOS LOS CAMPOS REQUERIDOS
+    children = []
+    for child in menu.get_active_children().order_by('order'):
+        children.append({
+            'id': child.id,
+            'name': child.name,
+            'slug': child.slug,
+            'url': child.get_url(),
+            'icon': child.icon or '',
+            'level': child.level,
+            'is_featured': menu.is_featured,
+            'has_children': child.has_children(),
+            'children': [],  # Sin recursión profunda
+        })
+    
+    # ✅ CONSTRUIR DICT PRINCIPAL
+    return {
+        'id': menu.id,
+        'name': menu.name,
+        'slug': menu.slug,
+        'url': menu.get_url(),
+        'icon': menu.icon or '',
+        'level': menu.level,
+        'is_featured': menu.is_featured,
+        'has_children': menu.has_children(),
+        'children': children,
+    }
+
+
+@router.get("/menus/types/list", response=List[dict])
+def list_menu_types(request):
+    """
+    Lista todos los tipos de menú con conteos.
+    
+    Ejemplo:
+    GET /api/menus/types/list
     
     Response:
     [
         {
-            "value": "home_hero",
-            "label": "Home - Hero Banner",
+            "value": "header",
+            "label": "Menú Principal (Header)",
             "count": 5,
-            "active_count": 3
+            "active_count": 4
         }
     ]
     """
-    sections_data = []
+    types_data = []
     
-    for section_value, section_label in Slider.SECTION_CHOICES:
-        total_count = Slider.objects.filter(section=section_value).count()
-        active_count = Slider.objects.filter(
-            section=section_value, 
+    for type_value, type_label in Menu.MENU_TYPE_CHOICES:
+        total_count = Menu.objects.filter(menu_type=type_value).count()
+        active_count = Menu.objects.filter(
+            menu_type=type_value,
             is_active=True
         ).count()
         
-        if total_count > 0:  # Solo mostrar secciones con sliders
-            sections_data.append({
-                'value': section_value,
-                'label': section_label,
+        if total_count > 0:
+            types_data.append({
+                'value': type_value,
+                'label': type_label,
                 'count': total_count,
                 'active_count': active_count
             })
     
-    return sections_data
+    return types_data
 
 
-# 7. ✨ BÚSQUEDA RÁPIDA (ahora incluye slug)
-@router.get("/sliders/search", response=List[SliderListSchema])
-def search_sliders(request, q: str, limit: int = 10):
-    """
-    Búsqueda rápida de sliders en título, slug y contenido
+# ============================================================================
+# ENDPOINTS DE PAGE (NUEVOS)
+# ============================================================================
+
+@router.get("/pages/list", response=List[PageListSchema])
+def list_pages(
+    request,
+    page_type: Optional[str] = None,
+    is_published: Optional[bool] = True,
+    search: Optional[str] = None
+):
+    """Lista todas las páginas con filtros."""
+    queryset = Page.objects.all()
     
-    Parámetros:
-    - q: Término de búsqueda
-    - limit: Número máximo de resultados (default: 10)
+    if page_type:
+        queryset = queryset.filter(page_type=page_type)
     
-    Ejemplos:
-    GET /api/sliders/search?q=ofertas
-    GET /api/sliders/search?q=womens-style
-    GET /api/sliders/search?q=navidad&limit=5
-    """
+    if is_published is not None:
+        queryset = queryset.filter(is_published=is_published)
     
-    queryset = Slider.objects.filter(
-        Q(title__icontains=q) |
-        Q(slug__icontains=q) |  # ✨ Incluir slug en búsqueda
-        Q(content__icontains=q) |
-        Q(section__icontains=q)
-    ).order_by('-is_active', 'order')[:limit]
+    if search:
+        queryset = queryset.filter(
+            Q(title__icontains=search) |
+            Q(slug__icontains=search) |
+            Q(content__icontains=search) |
+            Q(excerpt__icontains=search)
+        )
     
+    # Solo páginas publicadas actualmente
+    now = timezone.now()
+    queryset = queryset.filter(
+        Q(published_at__isnull=True) | Q(published_at__lte=now)
+    )
+    
+    queryset = queryset.order_by('page_type', 'order', 'title')
+    
+    # Construir respuesta manualmente
     result = []
-    for slider in queryset:
+    for page in queryset:
         result.append({
-            'id': slider.id,
-            'title': slider.title,
-            'slug': slider.slug,  # ✨ Incluir slug
-            'section': slider.section,
-            'section_display': slider.get_section_display(),
-            'image_url': request.build_absolute_uri(slider.image.url) if slider.image else None,
-            'heading': slider.get_content_field('heading'),
-            'order': slider.order,
-            'is_active': slider.is_active,
-            'is_currently_active': slider.is_currently_active(),
+            'id': page.id,
+            'title': page.title,
+            'slug': page.slug,
+            'page_type': page.page_type,
+            'page_type_display': page.get_page_type_display(),
+            'excerpt': page.excerpt,
+            'featured_image_url': page.featured_image_url,
+            'is_published': page.is_published,
+            'published_at': page.published_at,
+            'reading_time': page.get_reading_time(),
         })
     
     return result
 
 
-# 8. SLIDERS ACTIVOS AGRUPADOS POR SECCIÓN
-@router.get("/sliders/active/by-section", response=Dict[str, List[SliderListSchema]])
-def get_active_by_section(request):
+@router.get("/pages/{page_id}", response=PageDetailSchema)
+def get_page(request, page_id: int):
+    """Obtiene detalles completos de una página."""
+    page = get_object_or_404(Page, id=page_id, is_published=True)
+    
+    # Verificar autenticación si es requerida
+    if page.require_auth and not request.user.is_authenticated:
+        return {"error": "Autenticación requerida"}, 401
+    
+    return {
+        'id': page.id,
+        'title': page.title,
+        'slug': page.slug,
+        'page_type': page.page_type,
+        'page_type_display': page.get_page_type_display(),
+        'template': page.template,
+        'template_display': page.get_template_display(),
+        'content': page.content,
+        'excerpt': page.excerpt,
+        'featured_image_url': page.featured_image_url,
+        'meta_title': page.meta_title,
+        'meta_description': page.meta_description,
+        'meta_keywords': page.meta_keywords,
+        'is_published': page.is_published,
+        'show_in_menu': page.show_in_menu,
+        'require_auth': page.require_auth,
+        'published_at': page.published_at,
+        'created_at': page.created_at,
+        'updated_at': page.updated_at,
+        'reading_time': page.get_reading_time(),
+        'absolute_url': page.get_absolute_url(),
+    }
+
+
+@router.get("/pages/slug/{slug}", response=PageDetailSchema)
+def get_page_by_slug(request, slug: str):
+    """Obtiene una página por slug."""
+    page = get_object_or_404(Page, slug=slug, is_published=True)
+    
+    # Verificar autenticación si es requerida
+    if page.require_auth and not request.user.is_authenticated:
+        return {"error": "Autenticación requerida"}, 401
+    
+    return {
+        'id': page.id,
+        'title': page.title,
+        'slug': page.slug,
+        'page_type': page.page_type,
+        'page_type_display': page.get_page_type_display(),
+        'template': page.template,
+        'template_display': page.get_template_display(),
+        'content': page.content,
+        'excerpt': page.excerpt,
+        'featured_image_url': page.featured_image_url,
+        'meta_title': page.meta_title,
+        'meta_description': page.meta_description,
+        'meta_keywords': page.meta_keywords,
+        'is_published': page.is_published,
+        'show_in_menu': page.show_in_menu,
+        'require_auth': page.require_auth,
+        'published_at': page.published_at,
+        'created_at': page.created_at,
+        'updated_at': page.updated_at,
+        'reading_time': page.get_reading_time(),
+        'absolute_url': page.get_absolute_url(),
+    }
+
+
+@router.get("/pages/type/{page_type}", response=List[PageListSchema])
+def get_pages_by_type(request, page_type: str):
+    """Obtiene todas las páginas de un tipo específico."""
+    now = timezone.now()
+    
+    queryset = Page.objects.filter(
+        page_type=page_type,
+        is_published=True
+    ).filter(
+        Q(published_at__isnull=True) | Q(published_at__lte=now)
+    ).order_by('order', 'title')
+    
+    # Construir respuesta manualmente
+    result = []
+    for page in queryset:
+        result.append({
+            'id': page.id,
+            'title': page.title,
+            'slug': page.slug,
+            'page_type': page.page_type,
+            'page_type_display': page.get_page_type_display(),
+            'excerpt': page.excerpt,
+            'featured_image_url': page.featured_image_url,
+            'is_published': page.is_published,
+            'published_at': page.published_at,
+            'reading_time': page.get_reading_time(),
+        })
+    
+    return result
+
+
+@router.get("/pages/menu/footer", response=List[PageListSchema])
+def get_footer_pages(request):
+    """Obtiene páginas para mostrar en el footer."""
+    now = timezone.now()
+    
+    queryset = Page.objects.filter(
+        is_published=True,
+        show_in_menu=True
+    ).filter(
+        Q(published_at__isnull=True) | Q(published_at__lte=now)
+    ).order_by('page_type', 'order')
+    
+    # Construir respuesta manualmente
+    result = []
+    for page in queryset:
+        result.append({
+            'id': page.id,
+            'title': page.title,
+            'slug': page.slug,
+            'page_type': page.page_type,
+            'page_type_display': page.get_page_type_display(),
+            'excerpt': page.excerpt,
+            'featured_image_url': page.featured_image_url,
+            'is_published': page.is_published,
+            'published_at': page.published_at,
+            'reading_time': page.get_reading_time(),
+        })
+    
+    return result
+
+
+@router.get("/pages/seo/{slug}", response=PageSEOSchema)
+def get_page_seo(request, slug: str):
+    """Obtiene solo la información SEO de una página."""
+    page = get_object_or_404(Page, slug=slug, is_published=True)
+    
+    return {
+        'title': page.title,
+        'slug': page.slug,
+        'meta_title': page.meta_title,
+        'meta_description': page.meta_description,
+        'meta_keywords': page.meta_keywords,
+        'absolute_url': page.get_absolute_url(),
+    }
+
+
+@router.get("/pages/types/list", response=List[dict])
+def list_page_types(request):
     """
-    Obtiene todos los sliders activos agrupados por sección
+    Lista todos los tipos de página con conteos.
     
     Ejemplo:
-    GET /api/sliders/active/by-section
+    GET /api/pages/types/list
+    
+    Response:
+    [
+        {
+            "value": "legal",
+            "label": "Legal",
+            "count": 3
+        }
+    ]
+    """
+    types_data = []
+    
+    for type_value, type_label in Page.PAGE_TYPE_CHOICES:
+        count = Page.objects.filter(
+            page_type=type_value,
+            is_published=True
+        ).count()
+        
+        if count > 0:
+            types_data.append({
+                'value': type_value,
+                'label': type_label,
+                'count': count
+            })
+    
+    return types_data
+
+
+# ============================================================================
+# ENDPOINT COMBINADO: CONFIGURACIÓN COMPLETA DEL SITIO
+# ============================================================================
+
+@router.get("/config/site", response=dict)
+def get_site_config(request):
+    """
+    Obtiene toda la configuración del sitio en una sola llamada.
+    Incluye menús, páginas para footer, estadísticas, etc.
+    
+    Ejemplo:
+    GET /api/config/site
     
     Response:
     {
-        "home_hero": [...],
-        "home_deals": [...]
+        "menus": {
+            "header": [...],
+            "footer": [...],
+            "mobile": [...]
+        },
+        "footer_pages": [...],
+        "stats": {
+            "total_menus": 10,
+            "total_pages": 5
+        }
     }
     """
     now = timezone.now()
     
-    sliders = Slider.objects.filter(
-        is_active=True
-    ).filter(
-        Q(start_date__isnull=True) | Q(start_date__lte=now)
-    ).filter(
-        Q(end_date__isnull=True) | Q(end_date__gte=now)
-    ).order_by('section', 'order')
-    
-    # Agrupar por sección
-    result = {}
-    for slider in sliders:
-        section = slider.section
-        if section not in result:
-            result[section] = []
+    # Menús por tipo
+    menus = {}
+    for menu_type, _ in Menu.MENU_TYPE_CHOICES:
+        roots = Menu.objects.filter(
+            menu_type=menu_type,
+            parent__isnull=True,
+            is_active=True
+        ).order_by('order')
         
-        result[section].append({
-            'id': slider.id,
-            'title': slider.title,
-            'slug': slider.slug,  # ✨ Incluir slug
-            'section': slider.section,
-            'section_display': slider.get_section_display(),
-            'image_url': request.build_absolute_uri(slider.image.url) if slider.image else None,
-            'heading': slider.get_content_field('heading'),
-            'order': slider.order,
-            'is_active': slider.is_active,
-            'is_currently_active': slider.is_currently_active(),
-        })
+        if roots.exists():
+            def build_tree(node):
+                children = node.get_active_children().order_by('order')
+                return {
+                    'id': node.id,
+                    'name': node.name,
+                    'slug': node.slug,
+                    'url': node.get_url(),
+                    'icon': node.icon,
+                    'is_featured': node.is_featured,
+                    'children': [build_tree(child) for child in children]
+                }
+            
+            menus[menu_type] = [build_tree(root) for root in roots]
     
-    return result
-
+    # Páginas para footer
+    footer_pages = Page.objects.filter(
+        is_published=True,
+        show_in_menu=True
+    ).filter(
+        Q(published_at__isnull=True) | Q(published_at__lte=now)
+    ).order_by('page_type', 'order').values(
+        'id', 'title', 'slug', 'page_type'
+    )
+    
+    # Estadísticas
+    stats = {
+        'total_menus': Menu.objects.filter(is_active=True).count(),
+        'total_pages': Page.objects.filter(is_published=True).count(),
+    }
+    
+    return {
+        'menus': menus,
+        'footer_pages': list(footer_pages),
+        'stats': stats
+    }

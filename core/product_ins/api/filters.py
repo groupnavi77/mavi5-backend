@@ -2,6 +2,7 @@ from typing import Annotated, Optional
 from ninja import FilterSchema
 from ninja.filter_schema import FilterLookup
 from django.db.models import Q
+from enum import Enum
 
 class ProductFilter(FilterSchema):
     """
@@ -69,3 +70,21 @@ class ProductFilter(FilterSchema):
             queryset = queryset.distinct()
         
         return queryset
+    
+# Productos por tag
+class TagFilterMode(str, Enum):
+    """Modo de filtrado de tags"""
+    ALL = "all"  # Debe tener TODOS los tags (AND)
+    ANY = "any"  # Debe tener AL MENOS UNO (OR)
+
+# 📊 Enum para el dropdown de ordenamiento
+class ProductOrderBy(str, Enum):
+    """Opciones de ordenamiento para productos (aparece como dropdown en Swagger)"""
+    NEWEST = "-created_at"
+    OLDEST = "created_at"
+    RECENTLY_UPDATED = "-updated_at"
+    LEAST_UPDATED = "updated_at"
+    KEY_ASCENDING = "key"
+    KEY_DESCENDING = "-key"
+    ID_ASCENDING = "id"
+    ID_DESCENDING = "-id"

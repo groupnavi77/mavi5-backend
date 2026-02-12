@@ -39,6 +39,7 @@ class ProductOut(Schema):
     
     # Información del producto base (nombre, precio, etc.)
     product_base_name: Optional[str] = None
+    product_base_slug: Optional[str] = None
     product_base_key: Optional[str] = None
     
     # Usuario creador
@@ -66,7 +67,12 @@ class ProductOut(Schema):
     @staticmethod
     def resolve_product_base_name(obj):
         """Resuelve el nombre del ProductBase"""
-        return obj.Product_base.name if obj.Product_base else None
+        return obj.Product_base.title if obj.Product_base else None
+    
+    @staticmethod
+    def resolve_product_base_slug(obj):
+        """Resuelve el slug del ProductBase"""
+        return obj.Product_base.slug if obj.Product_base else None
     
     @staticmethod
     def resolve_product_base_key(obj):

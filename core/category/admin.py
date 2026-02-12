@@ -14,7 +14,7 @@ class CategoryAdmin(DraggableMPTTAdmin):
     """
     
     # Configuración de MPTT draggable
-    mptt_level_indent = 20
+    mptt_level_indent = 30
     
     # Campos en la lista
     list_display = [

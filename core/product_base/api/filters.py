@@ -25,9 +25,9 @@ class ProductBaseFilter(FilterSchema):
     search: Optional[str] = None
     
     # 📁 Filtro por categoría
-    category_id: Annotated[
-        Optional[int],
-        FilterLookup("category_id")
+    category_slug: Annotated[
+        Optional[str],
+        FilterLookup("category__slug")
     ] = None
     
     # 🏷️ Filtro por tags

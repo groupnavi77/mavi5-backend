@@ -1,4 +1,4 @@
-from ninja import Router
+from ninja import Query, Router
 from typing import List
 from django.shortcuts import get_object_or_404
 from ninja_extra.pagination import (
@@ -9,23 +9,13 @@ from ninja_extra.pagination import (
 from enum import Enum
 
 from core.product_ins.api.services import ProductService
-from core.product_ins.api.filters import ProductFilter
+from core.product_ins.api.filters import ProductFilter, TagFilterMode, ProductOrderBy
 from core.product_ins.api.schemas import ProductOut, ProductDetailOut
 from core.product_ins.models import Product
 
+
 router = Router()
 
-# 📊 Enum para el dropdown de ordenamiento
-class ProductOrderBy(str, Enum):
-    """Opciones de ordenamiento para productos (aparece como dropdown en Swagger)"""
-    NEWEST = "-created_at"
-    OLDEST = "created_at"
-    RECENTLY_UPDATED = "-updated_at"
-    LEAST_UPDATED = "updated_at"
-    KEY_ASCENDING = "key"
-    KEY_DESCENDING = "-key"
-    ID_ASCENDING = "id"
-    ID_DESCENDING = "-id"
 
 # Configuración de paginación
 class ProductPagination(PageNumberPaginationExtra):
@@ -115,21 +105,44 @@ def list_user_products(
     )
 
 
-# Productos por tag
-@router.get("/tag/{tag_name}", response=PaginatedResponseSchema[ProductOut])
+
+@router.get("/tags/filter", response=PaginatedResponseSchema[ProductOut])
 @paginate(ProductPagination)
-def list_products_by_tag(
-    request, 
-    tag_name: str,
-    order_by: ProductOrderBy = ProductOrderBy.NEWEST  # 🎯 Dropdown
+def list_products_by_tags_flexible(
+    request,
+    tags: List[str] = Query(..., description="Lista de tags para filtrar"),
+    mode: TagFilterMode = Query(TagFilterMode.ANY, description="Modo de filtrado: 'all' (AND) o 'any' (OR)"),
+    order_by: ProductOrderBy = ProductOrderBy.NEWEST
 ):
-    """Lista productos con un tag específico"""
-    return (
-        ProductService.list_products()
-        .filter(tag__name__iexact=tag_name)
-        .distinct()
-        .order_by(order_by.value)
-    )
+    """
+    Lista productos filtrando por tags con modo seleccionable.
+    
+    Ejemplos:
+    - GET /api/products/tags/filter?tags=oferta&tags=nuevo&mode=all
+      → Productos que son OFERTA Y NUEVO
+    
+    - GET /api/products/tags/filter?tags=oferta&tags=nuevo&mode=any
+      → Productos que son OFERTA O NUEVO
+    
+    - GET /api/products/tags/filter?tags=verano&tags=mujer&mode=all&order_by=price_low
+      → Productos de VERANO Y MUJER, ordenados por precio ascendente
+    """
+    from django.db.models import Q
+    
+    queryset = ProductService.list_products()
+    
+    if mode == TagFilterMode.ALL:
+        # Modo AND: debe tener TODOS los tags
+        for tag in tags:
+            queryset = queryset.filter(tag__name__iexact=tag)
+    else:
+        # Modo ANY: debe tener AL MENOS UNO
+        tag_filter = Q()
+        for tag in tags:
+            tag_filter |= Q(tag__name__iexact=tag)
+        queryset = queryset.filter(tag_filter)
+    
+    return queryset.distinct().order_by(order_by.value)
 
 
 # Productos por ProductBase
